@@ -95,14 +95,15 @@ def score_anomalies(y, y_hat, critic, score_window=10, critic_smooth_window=None
                     error_smooth_window=None, smooth=True, rec_error_type="point", comb="mult",
                     lambda_rec=0.5):
 
-    critic_smooth_window = critic_smooth_window or math.trunc(y.shape[0] * 0.01)
+    critic_smooth_window = critic_smooth_window or math.trunc(y.shape[-1] * 0.01)
     error_smooth_window = error_smooth_window or math.trunc(y.shape[0] * 0.01)
 
     pred_length = y_hat.shape[1]
     step_size = 1  # expected to be 1
 
-    gt = np.concatenate([y[:, 0, 0], y[-1,1:,0]])
-    critic_extended = np.repeat(critic, pred_length, axis=-1)
+    gt = torch.cat([y[:,0,:], y[-1,1:,:]], dim=0)
+    critic_extended = critic.repeat(1, 100)
+    #critic_extended = np.repeat(critic, pred_length, axis=-1)
 
     critic_kde_max = unroll_kde_max(critic_extended)
 

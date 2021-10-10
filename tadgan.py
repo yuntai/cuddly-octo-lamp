@@ -309,7 +309,7 @@ def predict(ckpt, _type='val'):
     #from dataset import nyc_dataset
     #ds = nyc_dataset()
 
-    ds = get_dataset(model.hparams.window_size, ['C01'], _type=_type)
+    ds = get_dataset(model.hparams.window_size, ['C01','C03'], _type=_type)
     dl = torch.utils.data.DataLoader(ds, shuffle=False, batch_size=256, drop_last=False)
 
     x, x_hat, critic_score = [], [], []
