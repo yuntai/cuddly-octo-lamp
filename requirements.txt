@@ -1,0 +1,8 @@
+seaborn
+xgboost
+statsmodels
+hyperopt
+pytorch_lightning
+pytorch_forecasting
+pyts
+wandb
