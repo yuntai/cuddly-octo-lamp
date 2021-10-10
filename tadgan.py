@@ -199,9 +199,12 @@ class TADGan(LightningModule):
     def train_dataloader(self):
         return self.train_dataloader_haicon()
 
+    def val_dataloader(self):
+        return self.train_dataloader_haicon()
+
     def train_dataloader_haicon(self):
         from dataset import get_dataset
-        ds = get_dataset(self.hparams.window_size, ['C01'])
+        ds = get_dataset(self.hparams.window_size, ['C01','C03'])
         return DataLoader(ds, batch_size=self.hparams.batch_size, num_workers=12, shuffle=True)
 
     def validation_step(self, batch, batch_idx):
