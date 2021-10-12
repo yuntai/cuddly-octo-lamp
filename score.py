@@ -38,10 +38,10 @@ def reconstruction_errors(y, y_hat, step_size=1, score_window=10, smoothing_wind
     predictions = []
     predictions_vs = []
     for entries in unroll(y_hat):
-        predictions.append(entries.median())
-        predictions_vs.append(entries.quantile(torch.tensor([0., 0.25, 0.5, 0.75, 1.])))
+        predictions.append(entries.median(dim=-1)[0])
+        predictions_vs.append(entries.quantile(torch.tensor([0., 0.25, 0.5, 0.75, 1.]), dim=-1).transpose(0,1))
 
-    predictions = torch.tensor(predictions)
+    predictions = torch.stack(predictions)
     predictions_vs = torch.stack(predictions_vs)
 
     gt = torch.cat([y[:, 0, 0], y[-1,1:,0]])

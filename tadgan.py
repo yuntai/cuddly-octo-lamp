@@ -148,14 +148,13 @@ class TADGan(LightningModule):
             input_features=self.hparams.input_features,
             seq_len=self.hparams.window_size
         )
-        self.critic_z = CriticZ(latent_size=self.hparams.latent_size)
+        self.critic_z = CriticZ(
+            latent_size=self.hparams.latent_size
+        )
 
         self.loss_fn = nn.MSELoss()
 
     def forward(self, x):
-        #x = self.proj(x)
-        #x = torch.tanh(x)
-
         z = self.encoder(x)
 
         y_hat = self.generator(z)
@@ -190,27 +189,10 @@ class TADGan(LightningModule):
 
         return gradient_penalty
 
-    def train_dataloader_nyc(self):
-        from dataset import nyc_dataset
-        ds = nyc_dataset(window_size=self.hparams.window_size)
-        #ds = HaiDataset(vals, self.hparams.window_size)
-        return DataLoader(ds, batch_size=self.hparams.batch_size, num_workers=12, shuffle=True)
-
-    def train_dataloader(self):
-        return self.train_dataloader_haicon()
-
-    def val_dataloader(self):
-        return self.train_dataloader_haicon()
-
-    def train_dataloader_haicon(self):
+    def train_dataloader(self, shuffle=True):
         from dataset import get_dataset
-        ds = get_dataset(self.hparams.window_size, ['C01','C03'])
-        return DataLoader(ds, batch_size=self.hparams.batch_size, num_workers=12, shuffle=True)
-
-    def validation_step(self, batch, batch_idx):
-        x, x_hat, cirtic_score = self(batch)
-        l2_loss = self.loss_fn(x, x_hat)
-        self.log('val_l2', l2_loss, on_step=False, on_epoch=True, prog_bar=True)
+        ds = get_dataset(self.hparams.window_size, num_cols=self.hparams.input_features)
+        return DataLoader(ds, batch_size=self.hparams.batch_size, num_workers=12, shuffle=shuffle)
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         x = batch
@@ -271,9 +253,10 @@ class TADGan(LightningModule):
         b2 = self.hparams.b2
         n_critic = self.hparams.n_critic
 
-        params = list(self.critic_x.parameters())# + list(self.proj.parameters())
+        params = list(self.critic_x.parameters())
         opt_cx = torch.optim.Adam(params, lr=lr, betas=(b1, b2))
-        params = list(self.critic_z.parameters())# + list(self.proj.parameters())
+
+        params = list(self.critic_z.parameters())
         opt_cz = torch.optim.Adam(params, lr=lr, betas=(b1, b2))
 
         ge_params = list(self.encoder.parameters()) + list(self.generator.parameters())
@@ -306,10 +289,7 @@ def predict(ckpt, _type='val'):
 
     model = TADGan.load_from_checkpoint(ckpt).cuda()
 
-    #from dataset import nyc_dataset
-    #ds = nyc_dataset()
-
-    ds = get_dataset(model.hparams.window_size, ['C01','C03'], _type=_type)
+    ds = get_dataset(model.hparams.window_size, num_cols=model.hparams.input_features, _type=_type)
     dl = torch.utils.data.DataLoader(ds, shuffle=False, batch_size=256, drop_last=False)
 
     x, x_hat, critic_score = [], [], []
@@ -346,15 +326,16 @@ def fit(args: Namespace) -> None:
 if __name__ == '__main__':
     p = ArgumentParser()
     p.add_argument("--gpus", type=int, default=1, help="number of GPUs")
+    p.add_argument("--col", type=str)
     p.add_argument("--batch_size", type=int, default=64, help="size of the batches")
     p.add_argument("--lr", type=float, default=0.0004, help="adam: learning rate")
     p.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
     p.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
     p.add_argument("--latent_size", type=int, default=20, help="dimensionality of the latent space")
     p.add_argument("--window_size", type=int, default=100, help="window size")
-    p.add_argument("--input_features", type=int, default=2, help="number of input features")
+    p.add_argument("--input_features", type=int, default=1, help="number of input features")
     p.add_argument("--n_critic", type=int, default=5, help="n_critic")
-    p.add_argument("--max_epochs", type=int, default=100, help="max_epochs")
+    p.add_argument("--max_epochs", type=int, default=20, help="max_epochs")
     p.add_argument("--lambda_gp", type=float, default=10., help="gradient penalty weight")
     p.add_argument("--lambda_recon", type=float, default=10., help="reconstruction loss weight")
     p.add_argument("--seed", type=int, default=42, help="seed")

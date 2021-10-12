@@ -60,7 +60,7 @@ def nyc_dataset(window_size=100):
     return ds
 
 
-def get_dataset(window_size=100, cols=None, _type="train", dataroot="./data"):
+def get_dataset(window_size=100, num_cols=1, _type="train", dataroot="./data"):
     assert _type in ['train', 'val']
 
     dataroot = Path(dataroot)
@@ -68,21 +68,15 @@ def get_dataset(window_size=100, cols=None, _type="train", dataroot="./data"):
     tr_dfs = [pd.read_csv(fn) for fn in (dataroot / "train").glob("*.csv")]
     va_df = pd.read_csv(dataroot / "validation/validation.csv")
 
-    if cols is None:
-        cols = list(tr_dfs[0].columns[1:])
+    cols = list(tr_dfs[0].columns)
+    cols = [c for c in cols if c not in DROP_COLS][:num_cols+1] # +1 timestamp
 
     attacks = va_df.pop("attack")
-
-    cols = ["timestamp"] + cols
 
     tr_dfs = [df.loc[:, cols] for df in tr_dfs][:]
     va_df = va_df.loc[:, cols]
 
     df_all = tr_dfs + [va_df]
-
-    for df in df_all:
-        drop_cols = [c for c in DROP_COLS if c in cols]
-        df.drop(drop_cols, axis=1, inplace=True)
 
     df_all = pd.concat(df_all).iloc[:, 1:]
 
