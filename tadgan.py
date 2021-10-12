@@ -277,7 +277,7 @@ class TADGan(LightningModule):
             monitor="l2",
             save_top_k=10,
             filename='{epoch}-{step}-{l2:.3f}',
-            mode='max'
+            mode='min'
         )
         #lr_monitor_cb = LearningRateMonitor(logging_interval='step')
 
@@ -332,7 +332,7 @@ def fit(args: Namespace) -> None:
 
 if __name__ == '__main__':
     p = ArgumentParser()
-    p.add_argument("--gpus", type=int, default=1, help="number of GPUs")
+    p.add_argument("--gpus", type=int, default=-1, help="number of GPUs")
     p.add_argument("--col", type=str)
     p.add_argument("--batch_size", type=int, default=64, help="size of the batches")
     p.add_argument("--lr", type=float, default=0.0004, help="adam: learning rate")
