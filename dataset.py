@@ -85,8 +85,12 @@ def nyc_dataset(window_size=100):
     ds = HaiDataset(vals, window_size)
     return ds
 
+def get_num_cols():
+    fn = next((Path("./data") / "train").glob("*.csv"))
+    df = pd.read_csv(fn)
+    return len([c for c in df.columns if c not in DROP_COLS]) - 1
 
-def get_dataset(window_size=100, num_cols=1, _type="train", dataroot="./data"):
+def get_dataset(window_size=100, _type="train", dataroot="./data"):
     assert _type in ['train', 'val']
 
     dataroot = Path(dataroot)
@@ -95,7 +99,7 @@ def get_dataset(window_size=100, num_cols=1, _type="train", dataroot="./data"):
     va_df = pd.read_csv(dataroot / "validation/validation.csv")
 
     cols = list(tr_dfs[0].columns)
-    cols = [c for c in cols if c not in DROP_COLS][:num_cols+1] # +1 timestamp
+    cols = [c for c in cols if c not in DROP_COLS]
 
     attacks = va_df.pop("attack")
 

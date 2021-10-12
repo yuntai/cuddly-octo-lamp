@@ -19,6 +19,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from tqdm import tqdm
 from dataset import HaiDataset
 
+import dataset
 from dataset import get_dataset
 import score
 
@@ -191,7 +192,7 @@ class TADGan(LightningModule):
 
     def train_dataloader(self, shuffle=True):
         from dataset import get_dataset
-        ds = get_dataset(self.hparams.window_size, num_cols=self.hparams.input_features)
+        ds = get_dataset(self.hparams.window_size)
         return DataLoader(ds, batch_size=self.hparams.batch_size, num_workers=12, shuffle=shuffle)
 
     def training_step(self, batch, batch_idx, optimizer_idx):
@@ -289,7 +290,7 @@ def predict(ckpt, _type='val'):
 
     model = TADGan.load_from_checkpoint(ckpt).cuda()
 
-    ds = get_dataset(model.hparams.window_size, num_cols=model.hparams.input_features, _type=_type)
+    ds = get_dataset(model.hparams.window_size, num_cols=-1, _type=_type)
     if _type == 'val':
         ds, attacks = ds
     dl = torch.utils.data.DataLoader(ds, shuffle=False, batch_size=256, drop_last=False)
@@ -339,7 +340,7 @@ if __name__ == '__main__':
     p.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
     p.add_argument("--latent_size", type=int, default=20, help="dimensionality of the latent space")
     p.add_argument("--window_size", type=int, default=100, help="window size")
-    p.add_argument("--input_features", type=int, default=1, help="number of input features")
+    p.add_argument("--input_features", type=int, default=-1, help="number of input features")
     p.add_argument("--n_critic", type=int, default=5, help="n_critic")
     p.add_argument("--max_epochs", type=int, default=20, help="max_epochs")
     p.add_argument("--lambda_gp", type=float, default=10., help="gradient penalty weight")
@@ -348,5 +349,8 @@ if __name__ == '__main__':
     p.add_argument('--project', type=str, default='dacon-haicon')
 
     hparams = p.parse_args()
+    if hparams.input_features == -1:
+        num_cols = dataset.get_num_cols()
+        hparams.input_features = dataset.get_num_cols()
 
     fit(hparams)
