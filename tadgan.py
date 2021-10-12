@@ -290,6 +290,8 @@ def predict(ckpt, _type='val'):
     model = TADGan.load_from_checkpoint(ckpt).cuda()
 
     ds = get_dataset(model.hparams.window_size, num_cols=model.hparams.input_features, _type=_type)
+    if _type == 'val':
+        ds, attacks = ds
     dl = torch.utils.data.DataLoader(ds, shuffle=False, batch_size=256, drop_last=False)
 
     x, x_hat, critic_score = [], [], []
@@ -307,7 +309,11 @@ def predict(ckpt, _type='val'):
     anomaly_score, gt, pred = score.score_anomalies(x, x_hat, critic_score, rec_error_type="dtw", comb="mult")
     pred = pred.mean(dim=-1)
 
-    return x, x_hat, critic_score, anomaly_score, gt, pred
+    ret = [x, x_hat, critic_score, anomaly_score, gt, pred]
+    if _type == 'val':
+        ret += ['attacks']
+
+    return tuple(ret)
 
 def fit(args: Namespace) -> None:
     print(args)

@@ -23,7 +23,6 @@ class HaiDataset(Dataset):
     def __getitem__(self, idx):
         return self.vals[idx : idx + self.window_size, :]
 
-
 DROP_COLS = [
     "C02",
     "C09",
@@ -48,6 +47,33 @@ DROP_COLS = [
     "C48",
     "C61",
     "C64",
+    'C06',
+    'C21',
+    'C27',
+    'C28',
+    'C30',
+    'C33',
+    'C37',
+    'C40',
+    'C41',
+    'C43',
+    'C44',
+    'C47',
+    'C56',
+    'C57',
+    'C62',
+    'C65',
+    'C67',
+    'C70',
+    'C72',
+    'C73',
+    'C74',
+    'C75',
+    'C76',
+    'C77',
+    'C78',
+    'C80',
+    'C83'
 ]
 
 
@@ -101,7 +127,10 @@ def get_dataset(window_size=100, num_cols=1, _type="train", dataroot="./data"):
 
     ds = torch.utils.data.ConcatDataset(datasets)
 
-    return ds
+    if _type == 'train':
+        return ds
+    else:
+        return ds, attacks
 
 
 # dl = DataLoader(ds, batch_size=64, shuffle=True)
