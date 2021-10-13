@@ -22,7 +22,6 @@ from dataset import HaiDataset
 import dataset
 from dataset import get_dataset
 import score
-import pprint
 
 # x -> z
 class Encoder(nn.Module):
@@ -164,16 +163,18 @@ class TADGan(LightningModule):
         critic_score = self.critic_x(x)
         return x, y_hat, critic_score
 
-    def compute_gradient_penalty(self, critic, real_samples, fake_samples):
-        """Calculates the gradient penalty loss for WGAN GP"""
+    def compute_gradient_penalty(self, critic_fun, real_samples, fake_samples):
+        # https://github.com/EmilienDupont/wgan-gp/blob/master/training.py
+        dev = self.device
+        bsz = real_samples.size(0)
+
         __slice = (...,) + (None,) * (real_samples.dim() - 1)
-        alpha = torch.rand(real_samples.size(0))[__slice].to(self.device)
+        alpha = torch.rand(bsz)[__slice].to(dev)
 
         # get random interpolation between real and fake samples
-        interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
-        interpolates = interpolates.to(self.device)
-        d_interpolates = critic(interpolates)
-        fake = torch.Tensor(real_samples.shape[0], 1).fill_(1.0).to(self.device)
+        interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True).to(dev)
+        d_interpolates = critic_fun(interpolates)
+        fake = torch.Tensor(bsz, 1).fill_(1.0).to(dev)
 
         # get gradient w.r.t. interpolates
         gradients = torch.autograd.grad(
@@ -185,15 +186,15 @@ class TADGan(LightningModule):
             only_inputs=True,
         )[0]
         gradients = gradients.contiguous()
+        gradients = gradients.view(gradients.size(0), -1).to(dev)
+        gradients_norm = torch.sqrt((gradients ** 2).sum(dim=1) + 1e-12)
+        gradients_penalty = ((gradients_norm - 1) ** 2).mean()
 
-        gradients = gradients.view(gradients.size(0), -1).to(self.device)
-        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
-
-        return gradient_penalty
+        return gradients_penalty
 
     def train_dataloader(self, shuffle=True):
         from dataset import get_dataset
-        ds = get_dataset(self.hparams.window_size)
+        ds = get_dataset(self.hparams.window_size, num_cols=self.hparams.input_features)
         return DataLoader(ds, batch_size=self.hparams.batch_size, num_workers=12, shuffle=shuffle)
 
     def training_step(self, batch, batch_idx, optimizer_idx):
@@ -225,18 +226,20 @@ class TADGan(LightningModule):
         # train discriminator
         # Measure discriminator's ability to classify real from generated samples
         else:
-            cx = self.critic_x(x)
+            #cx = self.critic_x(x)
+
             cx_ = self.critic_x(self.generator(z))
 
-            cz = self.critic_z(z)
+            #cz = self.critic_z(z)
             x_ = self.encoder(x)
+
             cz_ = self.critic_z(x_)
 
             x_re = self.generator(x_)
 
             l2_loss = self.loss_fn(x, x_re)
 
-            ge_loss = -cx_.mean()-cz_.mean() + self.hparams.lambda_recon * l2_loss
+            ge_loss = -cx_.mean() - cz_.mean() + self.hparams.lambda_recon * l2_loss
 
             self.log('ge', ge_loss, on_step=False, on_epoch=True, prog_bar=True)
             self.log('l2', l2_loss, on_step=False, on_epoch=True, prog_bar=True)
@@ -313,12 +316,12 @@ def predict(ckpt, _type='val'):
 
     ret = [x, x_hat, critic_score, anomaly_score, gt, pred]
     if _type == 'val':
-        ret += ['attacks']
+        ret += [attacks]
 
     return tuple(ret)
 
 def fit(args: Namespace) -> None:
-    pprint.pprint(vars(args))
+    print(args)
     pl.seed_everything(args.seed)
     model = TADGan(**vars(args))
     trainer = Trainer(

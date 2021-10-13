@@ -59,7 +59,7 @@ def plot(dfs: Union[pd.DataFrame, List], anomalies=[], valcol='C01'):
 
     df = dfs[0]
     time = convert_date(df['timestamp'])
-	time = [datetime.fromtimestamp(x) for x in df['timestamp']]
+    time = [datetime.fromtimestamp(x) for x in df['timestamp']]
     months = mdates.MonthLocator()  # every month
     days = mdates.DayLocator() # every day
 
