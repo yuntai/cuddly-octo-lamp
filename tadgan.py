@@ -291,7 +291,7 @@ def predict(ckpt, _type='val'):
 
     model = TADGan.load_from_checkpoint(ckpt).cuda()
 
-    ds = get_dataset(model.hparams.window_size, num_cols=-1, _type=_type)
+    ds = get_dataset(model.hparams.window_size, _type=_type)
     if _type == 'val':
         ds, attacks = ds
     dl = torch.utils.data.DataLoader(ds, shuffle=False, batch_size=256, drop_last=False)
