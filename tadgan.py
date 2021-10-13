@@ -22,6 +22,7 @@ from dataset import HaiDataset
 import dataset
 from dataset import get_dataset
 import score
+import pprint
 
 # x -> z
 class Encoder(nn.Module):
@@ -317,7 +318,7 @@ def predict(ckpt, _type='val'):
     return tuple(ret)
 
 def fit(args: Namespace) -> None:
-    print(args)
+    pprint.pprint(vars(args))
     pl.seed_everything(args.seed)
     model = TADGan(**vars(args))
     trainer = Trainer(
