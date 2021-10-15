@@ -156,12 +156,9 @@ class TADGan(LightningModule):
         self.loss_fn = nn.MSELoss()
 
     def forward(self, x):
-        z = self.encoder(x)
-
-        y_hat = self.generator(z)
-
+        x_hat = self.generator(self.encoder(x))
         critic_score = self.critic_x(x)
-        return x, y_hat, critic_score
+        return x, x_hat, critic_score
 
     def compute_gradient_penalty(self, critic_fun, real_samples, fake_samples):
         # https://github.com/EmilienDupont/wgan-gp/blob/master/training.py
@@ -293,8 +290,11 @@ class TADGan(LightningModule):
 def predict(ckpt, _type='val'):
 
     model = TADGan.load_from_checkpoint(ckpt).cuda()
+    hparams = model.hparams
+    print(ckpt)
+    print(hparams)
 
-    ds = get_dataset(model.hparams.window_size, num_cols=model.hparams.input_features, _type=_type)
+    ds = get_dataset(hparams.window_size, num_cols=hparams.input_features, _type=_type)
     if _type == 'val':
         ds, attacks = ds
     dl = torch.utils.data.DataLoader(ds, shuffle=False, batch_size=256, drop_last=False)
@@ -311,10 +311,15 @@ def predict(ckpt, _type='val'):
     x_hat = torch.cat(x_hat, dim=0)
     critic_score = torch.cat(critic_score, dim=0)
 
-    anomaly_score, gt, pred = score.score_anomalies(x, x_hat, critic_score, rec_error_type="dtw", comb="mult")
-    pred = pred.mean(dim=-1)
+    gt = torch.cat([x[:,0,:], x[-1,1:,:]], dim=0)
+    preds = score.unroll_predictions(x_hat)
+    preds_median = preds[...,-1]
+    #assert torch.allclose(gt, get_predictions(x)[0])
 
-    ret = [x, x_hat, critic_score, anomaly_score, gt, pred]
+    wnd_size = x.shape[1]
+    anomaly_score, cs, rs = score.score_anomalies(gt, preds_median, critic_score, wnd_size, rec_error_type="dtw", comb="mult")
+
+    ret = [x, x_hat, anomaly_score, gt, preds.mean(dim=-1), cs, rs]
     if _type == 'val':
         ret += [attacks]
 
@@ -342,15 +347,15 @@ if __name__ == '__main__':
     p.add_argument("--lr", type=float, default=0.0004, help="adam: learning rate")
     p.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
     p.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
-    p.add_argument("--latent_size", type=int, default=20, help="dimensionality of the latent space")
-    p.add_argument("--window_size", type=int, default=100, help="window size")
-    p.add_argument("--input_features", type=int, default=-1, help="number of input features")
     p.add_argument("--n_critic", type=int, default=5, help="n_critic")
-    p.add_argument("--max_epochs", type=int, default=20, help="max_epochs")
     p.add_argument("--lambda_gp", type=float, default=10., help="gradient penalty weight")
     p.add_argument("--lambda_recon", type=float, default=10., help="reconstruction loss weight")
     p.add_argument("--seed", type=int, default=42, help="seed")
     p.add_argument('--project', type=str, default='dacon-haicon')
+    p.add_argument("--latent_size", type=int, default=20, help="dimensionality of the latent space")
+    p.add_argument("--window_size", type=int, default=60, help="window size")
+    p.add_argument("--input_features", type=int, default=-1, help="number of input features")
+    p.add_argument("--max_epochs", type=int, default=1000, help="max_epochs")
 
     hparams = p.parse_args()
     if hparams.input_features == -1:

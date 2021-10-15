@@ -65,36 +65,27 @@ def _dtw_error(y, y_hat, score_window=10):
 
     return torch.tensor(errors)
 
-def reconstruction_errors(gt, x_hat, step_size=1, score_window=10, smoothing_window=0.01,
+def reconstruction_errors(gt, preds, step_size=1, score_window=10, smoothing_window=0.01,
                           smooth=True, rec_error_type='point'):
     if isinstance(smoothing_window, float):
-        smoothing_window = min(math.trunc(len(y) * smoothing_window), 200)
-
-    predictions = []
-    predictions_vs = []
-    for entries in unroll(x_hat):
-        predictions.append(entries.median(dim=-1)[0])
-        predictions_vs.append(entries.quantile(torch.tensor([0., 0.25, 0.5, 0.75, 1.]), dim=-1).transpose(0,1))
-
-    predictions = torch.stack(predictions)
-    predictions_vs = torch.stack(predictions_vs)
+        smoothing_window = min(math.trunc(gt.shape[0] * smoothing_window), 200)
 
     # compute reconstruction errors
     if rec_error_type.lower() == "point":
-        errors = _point_wise_error(gt, predictions)
+        errors = _point_wise_error(gt, preds)
 
     elif rec_error_type.lower() == "area":
-        errors = _area_error(gt, predictions, score_window)
+        errors = _area_error(gt, preds, score_window)
 
     elif rec_error_type.lower() == "dtw":
-        errors = _dtw_error(gt, predictions, score_window)
+        errors = _dtw_error(gt, preds, score_window)
 
     # apply smoothing
     if smooth:
         errors = pd.Series(errors).rolling(
             smoothing_window, center=True, min_periods=smoothing_window // 2).mean().values
 
-    return errors, predictions_vs
+    return errors
 
 def unroll_kde_max(vals):
     kde_max = []
@@ -110,56 +101,59 @@ def unroll_kde_max(vals):
             kde_max.append(entries.quantile(0.5))
     return torch.stack(kde_max)
 
-def compute_critic_score(critic_score, smooth_window):
+def compute_critic_score(wnd_size, critic_score, smooth_window):
+    critic_extended = critic_score.repeat(1, wnd_size)
+    critic_kde_max = unroll_kde_max(critic_extended)
+
     l_q = critic_score.quantile(0.25)
     u_q = critic_score.quantile(0.75)
-    in_range = torch.logical_and(critic_score >= l_q, critic_score <= u_q)
-    critic_mean = critic_score[in_range].mean()
-    critic_std = critic_score.std()
+    in_range = torch.logical_and(critic_kde_max >= l_q, critic_kde_max <= u_q)
+    critic_mean = critic_kde_max[in_range].mean()
+    critic_std = critic_kde_max.std()
 
-    z_scores = (critic_score - critic_mean).abs() / critic_std + 1
+    z_scores = (critic_kde_max - critic_mean).abs() / critic_std + 1
     z_scores = pd.Series(z_scores).rolling(
         smooth_window, center=True, min_periods=smooth_window // 2).mean().values
 
     return torch.tensor(z_scores)
 
-def score_anomalies(x, x_hat, critic_score, score_window=10, critic_smooth_window=None,
+def unroll_predictions(x_hat):
+    preds = []
+    for entries in unroll(x_hat):
+        preds.append(entries.quantile(torch.tensor([0., 0.25, 0.5, 0.75, 1.]), dim=-1).transpose(0,1))
+
+    preds = torch.stack(preds)
+
+    return preds
+
+def score_anomalies(gt, pred, critic_score, wnd_size, score_window=10, critic_smooth_window=None,
                     error_smooth_window=None, smooth=True, rec_error_type="point", comb="mult",
                     lambda_rec=0.5):
 
-    critic_smooth_window = critic_smooth_window or math.trunc(x.shape[0] * 0.01)
-    error_smooth_window = error_smooth_window or math.trunc(x.shape[0] * 0.01)
+    critic_smooth_window = critic_smooth_window or math.trunc(gt.shape[0] * 0.01)
+    error_smooth_window = error_smooth_window or math.trunc(gt.shape[0] * 0.01)
 
-    pred_length = x_hat.shape[1]
     step_size = 1  # expected to be 1
 
-    gt = torch.cat([x[:,0,:], x[-1,1:,:]], dim=0)
-    critic_extended = critic_score.repeat(1, 100)
-
-    critic_kde_max = unroll_kde_max(critic_extended)
-
     # Compute critic scores
-    critic_scores = compute_critic_score(critic_kde_max, critic_smooth_window)
+    critic_zscore = compute_critic_score(wnd_size, critic_score, critic_smooth_window)
 
     # Compute reconstruction scores
-    rec_scores, predictions = reconstruction_errors(
-        gt, x_hat, step_size, score_window, error_smooth_window, smooth, rec_error_type)
+    rec_errors = reconstruction_errors(
+        gt, pred, step_size, score_window, error_smooth_window, smooth, rec_error_type)
 
-    rec_scores = stats.zscore(rec_scores)
-    rec_scores = np.clip(rec_scores, a_min=0, a_max=None) + 1
+    rec_score = stats.zscore(rec_errors)
+    rec_zscore = np.clip(rec_score, a_min=0, a_max=None) + 1
 
-    # Combine the two scores
+    assert comb in ["mult", "sum", "rec"]
+    # combine the two scores
     if comb == "mult":
-        final_scores = np.multiply(critic_scores, rec_scores)
+        final_score = np.multiply(critic_zscore, rec_zscore)
 
     elif comb == "sum":
-        final_scores = (1 - lambda_rec) * (critic_scores - 1) + lambda_rec * (rec_scores - 1)
+        final_score = (1 - lambda_rec) * (critic_zscore - 1) + lambda_rec * (rec_zscore - 1)
 
     elif comb == "rec":
-        final_scores = rec_scores
+        final_score = rec_zscore
 
-    else:
-        raise ValueError(
-            'Unknown combination specified {}, use "mult", "sum", or "rec" instead.'.format(comb))
-
-    return final_scores, gt, predictions
+    return final_score, critic_zscore, rec_zscore

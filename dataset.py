@@ -6,14 +6,10 @@ from torch.utils.data import Dataset, ConcatDataset, DataLoader
 from pathlib import Path
 from datetime import timedelta
 from sklearn.preprocessing import MinMaxScaler
-#from data import load_signal
-
 
 class HaiDataset(Dataset):
     def __init__(self, vals, window_size=90):
-
         self.vals = torch.FloatTensor(vals)
-        # self.vals = df.iloc[:, 1:].values
         self.__len = vals.shape[0] - window_size + 1
         self.window_size = window_size
 
@@ -21,7 +17,7 @@ class HaiDataset(Dataset):
         return self.__len
 
     def __getitem__(self, idx):
-        return self.vals[idx : idx + self.window_size, :]
+        return self.vals[idx:idx+self.window_size,:]
 
 DROP_COLS = [
     "C02",
