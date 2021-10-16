@@ -355,7 +355,7 @@ if __name__ == '__main__':
     p.add_argument("--latent_size", type=int, default=20, help="dimensionality of the latent space")
     p.add_argument("--window_size", type=int, default=60, help="window size")
     p.add_argument("--input_features", type=int, default=-1, help="number of input features")
-    p.add_argument("--max_epochs", type=int, default=1000, help="max_epochs")
+    p.add_argument("--max_epochs", type=int, default=300, help="max_epochs")
 
     hparams = p.parse_args()
     if hparams.input_features == -1:

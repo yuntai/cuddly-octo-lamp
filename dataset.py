@@ -112,7 +112,7 @@ def get_dataset(window_size=100, num_cols=-1, _type="train", dataroot="./data"):
     scaler.fit(df_all)
 
     if _type == "train":
-        dfs = tr_dfs
+        dfs = tr_dfs[:1]
     elif _type == "val":
         dfs = [va_df]
 
